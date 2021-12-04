@@ -1,0 +1,11 @@
+version: '2.0'
+
+services:
+    tgbot:
+        container_name: tgbot
+        network_mode: bridge
+        build:
+            context: .
+            dockerfile: Dockerfile
+        volumes:
+            - ./settings.cfg:/root/settings.cfg
