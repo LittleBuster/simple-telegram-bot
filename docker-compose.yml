@@ -1,4 +1,4 @@
-version: '2.0'
+version: '3.0'
 
 services:
     tgbot:
@@ -8,4 +8,4 @@ services:
             context: .
             dockerfile: Dockerfile
         volumes:
-            - ./settings.cfg:/root/settings.cfg
+            - ./settings.cfg:/etc/tgbot.cfg
