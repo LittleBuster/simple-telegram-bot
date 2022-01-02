@@ -2,150 +2,105 @@
 
 ###################################################################
 #
-# Simple Telegram Bot
+# Telegram Bot on Bash
 #
-# Copyright (C) 2021 Sergey Denisov GPLv3
+# Copyright (C) 2021-2022 Sergey Denisov GPLv3
 #
 # Written by Sergey Denisov aka LittleBuster (DenisovS21@gmail.com)
 #
 ###################################################################
 
-###################################################################
-#
-#                        GLOBAL VARIABLES
-#
-###################################################################
-
-BOT_ID=""
-CHAT_ID=""
-LAST_UPD_ID=""
-CUR_MENU="MAIN"
-SETTINGS="settings.cfg"
+source src/global.sh
+source src/configs.sh
+source src/tgapi.sh
+source src/menu/main.sh
+source src/menu/select.sh
 
 ###################################################################
 #
-#                         GLOBAL FUNCTIONS
+#                         GENERAL FUNCTIONS
 #
 ###################################################################
 
-function configs_load() {
-    if [ -f $1 ]
-    then
-        . $1
-        BOT_ID=$TG_BOT
-        LAST_UPD_ID=$TG_UPD_ID
-        CUR_MENU=$TG_MENU
-    fi
-}
+function process_msg() {
+    IFS=""
+    local text=$(tgapi_msg_text $4)
 
-function configs_save() {
-    echo "TG_BOT=$BOT_ID" > $SETTINGS
-    echo "TG_UPD_ID=$LAST_UPD_ID" >> $SETTINGS
-    echo "TG_MENU=$CUR_MENU" >> $SETTINGS
-}
+    echo "Сообщение от $1 $2 ($3): $text"
 
-###################################################################
-#
-#                          MENU FUNCTIONS
-#
-###################################################################
-
-function print_main_menu() {
-    CUR_MENU="MAIN"
-    configs_save
-
-    local text=""
-
-    case "$1" in
-        '"Запустить"')
-            text="Начало сборки"
+    case $(configs_menu_get) in
+        $MENU_MAIN)
+            menu_main_show $text
             ;;
-        '"Выбрать"')
-            return $(print_select_menu)
-            ;;
-        *)
-            text="Добро пожаловать в главное меню"
-            ;;
-    esac
-
-    if [[ $1 != '"Запустить"' ]] ; then
-        curl --silent -F photo=@"image.jpg" \
-            https://api.telegram.org/bot$BOT_ID/sendPhoto?chat_id=$CHAT_ID 1> /dev/null
-    fi
-
-    curl --silent -X POST \
-        -d chat_id=$CHAT_ID \
-        -d parse_mode="HTML" \
-        -d text="<b>BOT:</b> $text" \
-        -d reply_markup='{"keyboard":[["Запустить"],["Выбрать"]]}' \
-        https://api.telegram.org/bot$BOT_ID/sendMessage 1> /dev/null
-}
-
-function print_select_menu() {
-    CUR_MENU="SELECT"
-    configs_save
-
-    case "$1" in
-        '"Назад"')
-            return $(print_main_menu)
-            ;;
-    esac
-
-    curl --silent -X POST \
-        -d chat_id=$CHAT_ID \
-        -d parse_mode="HTML" \
-        -d text="<b>BOT:</b> Выбор чего-либо" \
-        -d reply_markup='{"keyboard":[["Назад"]]}' \
-        https://api.telegram.org/bot$BOT_ID/sendMessage 1> /dev/null
-}
-
-###################################################################
-#
-#                        COMMANDS PROCESSOR
-#
-###################################################################
-
-function process_cmd() {
-    local text=$(echo $1 | jq ".message.text")
-
-    echo "Incomming msg: $text"
-
-    case $CUR_MENU in
-        "MAIN")
-            print_main_menu $text
-            ;;
-        "SELECT")
-            print_select_menu $text
+        $MENU_SELECT)
+            menu_select_show $text
             ;;
     esac
 }
-
-###################################################################
-#
-#                         MAIN FUNCTIONS
-#
-###################################################################
 
 function start_bot() {
     while :
     do
-        local msg=$(curl --silent https://api.telegram.org/bot$BOT_ID/getUpdates | jq ".result[-1]")
-        local upd_id=$(echo $msg | jq ".update_id")
-        
-        if [[ $upd_id != $LAST_UPD_ID ]] ; then
-            LAST_UPD_ID=$upd_id
-            CHAT_ID=$(echo $msg | jq ".message.chat.id")
+        IFS=""
+        local msg=$(tgapi_lastmsg_get)
+        local upd_id=$(tgapi_msg_upd $msg)
+
+        if [[ $upd_id != $CFG_UPD_ID ]] ; then
+            CFG_UPD_ID=$upd_id
 
             IFS=""
-            process_cmd $msg
+            local cur_id=$(tgapi_msg_chat $msg)
+            local name=$(tgapi_msg_name $msg)
+            local surname=$(tgapi_msg_surname $msg)
+
+            if [[ $cur_id == $CFG_ALLOW_USER ]] ; then
+                G_CHAT_ID=$cur_id
+                process_msg $name $surname $cur_id $msg
+            else
+                tgapi_msg_send $cur_id "Доступ заблокирован."
+                echo "Доступ для $name $surname ($cur_id) заблокирован."
+            fi
+
+            tgapi_offset_set $CFG_UPD_ID
         fi
 
         sleep 1
     done
 }
 
+function print_help() {
+    echo "Параметры:"
+    echo "  -c <CFG_FILE>   Открыть скрипт с указанным конфигурационным файлом"
+    echo "  -h              Информация о параметрах"
+}
+
+###################################################################
+#
+#                          MAIN FUNCTION
+#
+###################################################################
+
 function main() {
-    configs_load $SETTINGS
+    while [ -n "$1" ]
+    do
+        case $1 in
+            -c)
+                CFG_FILE=$2
+                shift
+                ;;
+            -h)
+                print_help
+                exit 0
+                ;;
+            *)
+                echo "Нет такого параметра: $1"
+                print_help
+                ;;
+        esac
+        shift
+    done
+
+    configs_load $CFG_FILE
     start_bot
 }
 
@@ -155,4 +110,4 @@ function main() {
 #
 ###################################################################
 
-main
+main $@

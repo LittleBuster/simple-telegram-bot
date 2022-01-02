@@ -15,5 +15,7 @@ ENV TZ=Asia/Novosibirsk
 WORKDIR /root/
 
 COPY ./tgbot.sh .
+COPY ./image.jpg .
+COPY ./src /root/src/
 
-CMD ["./tgbot.sh"]
+CMD ["tgbot.sh", "-c", "/etc/tgbot.cfg"]
