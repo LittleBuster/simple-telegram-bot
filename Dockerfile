@@ -18,4 +18,4 @@ COPY ./tgbot.sh .
 COPY ./image.jpg .
 COPY ./src /root/src/
 
-CMD ["tgbot.sh", "-c", "/etc/tgbot.cfg"]
+CMD ["./tgbot.sh", "-c", "/etc/tgbot.cfg"]
